@@ -1,0 +1,7 @@
+# Managed by ansible.
+# file: {{ template_destpath }}
+SHELL=/bin/sh
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+{% for __pgbackrest_job in pgbackrest_schedules %}
+{{ __pgbackrest_job.minute | default('0') }} {{ __pgbackrest_job.hour | default('2') }} {{ __pgbackrest_job.day | default('*') }} {{ __pgbackrest_job.month | default('*') }} {{ __pgbackrest_job.weekday | default('*') }} {{ pgbackrest_user }} /usr/bin/pgbackrest --config={{ pgbackrest_config_file | quote }} --stanza={{ __pgbackrest_job.stanza }} --repo={{ __pgbackrest_job.repo | default(1) }} --type={{ __pgbackrest_job.type | default('incr') }} backup
+{% endfor %}

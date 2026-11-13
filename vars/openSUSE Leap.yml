@@ -1,0 +1,12 @@
+---
+# role: pgbackrest
+# file: vars/openSUSE Leap.yml
+
+__pgbackrest_packages:
+  - pgbackrest>=2.55
+  - openssh
+  - cron
+  - acl
+__pgbackrest_cron_service: cron
+__pgbackrest_repository_url: >-
+  https://download.opensuse.org/repositories/server:/database:/postgresql/{{ ansible_facts.distribution_version }}

@@ -1,0 +1,204 @@
+---
+# role: pgbackrest
+# file: molecule/resources/playbooks/prepare.yml
+
+- name: PGBACKREST | Prepare backup and SSH integration tests
+  hosts: all
+  gather_facts: true
+  vars:
+    __pgbackrest_test_packages:
+      Debian:
+        - postgresql
+        - libpq-dev
+        - openssh-server
+        - acl
+        - python3-psycopg2
+      RedHat:
+        - postgresql-server
+        - openssh-server
+        - acl
+        - python3-psycopg2
+      Suse:
+        - postgresql-server
+        - openssh
+        - acl
+        - python3-psycopg2
+  tasks:
+
+    - name: PGBACKREST | Refresh APT metadata
+      become: true
+      become_user: root
+      ansible.builtin.apt:
+        update_cache: true
+      when: ansible_facts.os_family == 'Debian'
+
+    - name: PGBACKREST | Install PostgreSQL test dependencies
+      become: true
+      become_user: root
+      ansible.builtin.package:
+        name: '{{ __pgbackrest_test_packages[ansible_facts.os_family] }}'
+        state: present
+
+    - name: PGBACKREST | Locate PostgreSQL binaries
+      ansible.builtin.command:
+        cmd: /usr/bin/pg_config --bindir
+      register: __pgbackrest_test_bindir
+      changed_when: false
+      when: ansible_facts.os_family == 'Debian'
+
+    - name: PGBACKREST | Create test database directories
+      become: true
+      become_user: root
+      ansible.builtin.file:
+        path: '{{ __pgbackrest_test_directory }}'
+        state: directory
+        owner: postgres
+        group: postgres
+        mode: '0700'
+      loop:
+        - /var/lib/pgbackrest-test
+        - /var/lib/pgbackrest-test/data
+        - /var/lib/pgbackrest-test/restore-local
+        - /var/lib/pgbackrest-test/restore-remote
+      loop_control:
+        loop_var: __pgbackrest_test_directory
+
+    - name: PGBACKREST | Initialize test PostgreSQL cluster
+      become: true
+      become_user: postgres
+      ansible.builtin.command:
+        argv:
+          - '{{ __pgbackrest_test_bindir.stdout | default("/usr/bin") }}/initdb'
+          - -D
+          - /var/lib/pgbackrest-test/data
+          - --auth-local=trust
+          - --auth-host=reject
+        creates: /var/lib/pgbackrest-test/data/PG_VERSION
+
+    - name: PGBACKREST | Configure test PostgreSQL cluster
+      become: true
+      become_user: postgres
+      ansible.builtin.blockinfile:
+        path: /var/lib/pgbackrest-test/data/postgresql.conf
+        block: |
+          port = 55432
+          listen_addresses = ''
+          unix_socket_directories = '/var/lib/pgbackrest-test'
+          archive_mode = on
+          archive_command = '/usr/bin/pgbackrest --stanza=main archive-push %p'
+
+    - name: PGBACKREST | Create test database service
+      become: true
+      become_user: root
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/pgbackrest-test.service
+        mode: '0644'
+        content: |
+          [Unit]
+          Description=PostgreSQL backup test
+          [Service]
+          User=postgres
+          Group=postgres
+          ExecStart={{ __pgbackrest_test_bindir.stdout | default('/usr/bin') }}/postgres -D /var/lib/pgbackrest-test/data
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: PGBACKREST | Start test PostgreSQL
+      become: true
+      become_user: root
+      ansible.builtin.systemd_service:
+        name: pgbackrest-test
+        state: started
+        daemon_reload: true
+
+    - name: PGBACKREST | Read PostgreSQL account
+      ansible.builtin.getent:
+        database: passwd
+        key: postgres
+
+    - name: PGBACKREST | Create test SSH directory
+      become: true
+      become_user: root
+      ansible.builtin.file:
+        path: '{{ ansible_facts.getent_passwd.postgres[4] }}/.ssh'
+        state: directory
+        owner: postgres
+        group: postgres
+        mode: '0700'
+
+    - name: PGBACKREST | Create ephemeral test SSH identity
+      become: true
+      become_user: root
+      community.crypto.openssh_keypair:
+        path: '{{ ansible_facts.getent_passwd.postgres[4] }}/.ssh/id_ed25519'
+        type: ed25519
+        owner: postgres
+        group: postgres
+        mode: '0600'
+      register: __pgbackrest_test_identity
+
+    - name: PGBACKREST | Authorize test SSH identity
+      become: true
+      become_user: root
+      ansible.posix.authorized_key:
+        user: postgres
+        key: '{{ __pgbackrest_test_identity.public_key }}'
+        key_options: no-agent-forwarding,no-port-forwarding,no-X11-forwarding,no-pty
+
+    - name: PGBACKREST | Generate SSH server keys
+      become: true
+      become_user: root
+      ansible.builtin.command:
+        cmd: ssh-keygen -A
+        creates: /etc/ssh/ssh_host_ed25519_key
+
+    - name: PGBACKREST | Read test SSH server identity
+      become: true
+      become_user: root
+      ansible.builtin.slurp:
+        src: /etc/ssh/ssh_host_ed25519_key.pub
+      register: __pgbackrest_test_host_key
+
+    - name: PGBACKREST | Trust test SSH host key
+      become: true
+      become_user: postgres
+      ansible.builtin.known_hosts:
+        name: localhost
+        key: localhost {{ __pgbackrest_test_host_key.content | b64decode }}
+        path: '{{ ansible_facts.getent_passwd.postgres[4] }}/.ssh/known_hosts'
+
+    - name: PGBACKREST | Allow SSH logins in the test containers
+      become: true
+      become_user: root
+      ansible.builtin.file:
+        path: /run/nologin
+        state: absent
+
+    - name: PGBACKREST | Enable SSH for remote repository tests
+      become: true
+      become_user: root
+      ansible.builtin.service:
+        name: '{{ ''ssh'' if ansible_facts.os_family == ''Debian'' else ''sshd'' }}'
+        state: started
+
+    - name: PGBACKREST | Configure the SSH repository endpoint
+      ansible.builtin.include_role:
+        name: '{{ lookup(''ansible.builtin.env'', ''MOLECULE_PROJECT_DIRECTORY'') }}'
+      vars:
+        pgbackrest_config_file: /etc/pgbackrest/repository.conf
+        pgbackrest_create_stanzas: false
+        pgbackrest_repositories:
+          - id: 2
+            path: /var/lib/pgbackrest-test/remote
+            options:
+              retention-full: 2
+        pgbackrest_schedules: []
+        pgbackrest_stanzas:
+          - name: main
+            options:
+              pg1-path: /var/lib/pgbackrest-test/data
+              pg1-port: 55432
+              pg1-socket-path: /var/lib/pgbackrest-test
+              pg1-host: localhost
+              pg1-host-user: postgres
+              pg1-host-config: /etc/pgbackrest/pgbackrest.conf

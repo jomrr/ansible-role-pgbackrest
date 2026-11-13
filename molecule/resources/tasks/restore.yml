@@ -1,0 +1,63 @@
+---
+# role: pgbackrest
+# file: molecule/resources/tasks/restore.yml
+
+- name: PGBACKREST | Restore from the selected repository
+  become: true
+  become_user: postgres
+  ansible.builtin.command:
+    argv:
+      - pgbackrest
+      - --stanza=main
+      - --repo={{ __pgbackrest_test_restore.repo }}
+      - --pg1-path=/var/lib/pgbackrest-test/restore-{{ __pgbackrest_test_restore.name }}
+      - restore
+  changed_when: true
+
+- name: PGBACKREST | Start restored PostgreSQL cluster
+  become: true
+  become_user: postgres
+  ansible.builtin.command:
+    argv:
+      - '{{ __pgbackrest_test_bindir.stdout | default("/usr/bin") }}/pg_ctl'
+      - -D
+      - /var/lib/pgbackrest-test/restore-{{ __pgbackrest_test_restore.name }}
+      - -l
+      - /var/lib/pgbackrest-test/restore-{{ __pgbackrest_test_restore.name }}.log
+      - -o
+      - -p {{ __pgbackrest_test_restore.port }} -c archive_mode=off
+      - -w
+      - start
+  changed_when: true
+
+- name: PGBACKREST | Read restored database data
+  become: true
+  become_user: postgres
+  community.postgresql.postgresql_query:
+    login_unix_socket: /var/lib/pgbackrest-test
+    login_port: '{{ __pgbackrest_test_restore.port }}'
+    query: SELECT value FROM backup_test
+  register: __pgbackrest_test_restored
+  until: __pgbackrest_test_restored is succeeded
+  retries: 15
+  delay: 1
+
+- name: PGBACKREST | Verify restored database contents
+  ansible.builtin.assert:
+    that:
+      - '__pgbackrest_test_restored.query_result == [{''value'': ''pgbackrest-restore-ok''}]'
+    quiet: true
+
+- name: PGBACKREST | Stop restored PostgreSQL cluster
+  become: true
+  become_user: postgres
+  ansible.builtin.command:
+    argv:
+      - '{{ __pgbackrest_test_bindir.stdout | default("/usr/bin") }}/pg_ctl'
+      - -D
+      - /var/lib/pgbackrest-test/restore-{{ __pgbackrest_test_restore.name }}
+      - -m
+      - fast
+      - -w
+      - stop
+  changed_when: true

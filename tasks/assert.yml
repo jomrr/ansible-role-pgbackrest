@@ -1,0 +1,86 @@
+---
+# role: pgbackrest
+# file: tasks/assert.yml
+
+- name: PGBACKREST | Validate unique repository and stanza identifiers
+  ansible.builtin.assert:
+    that:
+      - pgbackrest_repositories | map(attribute='id') | unique | length == pgbackrest_repositories | length
+      - pgbackrest_stanzas | map(attribute='name') | unique | length == pgbackrest_stanzas | length
+      - pgbackrest_repositories | length > 0
+      - pgbackrest_user is match('^[a-z_][a-z0-9_-]*[$]?$')
+    quiet: true
+
+- name: PGBACKREST | Validate managed paths
+  ansible.builtin.assert:
+    that:
+      - __pgbackrest_path is match('^/[^\s%]+$')
+      - "'..' not in __pgbackrest_path.split('/')"
+    quiet: true
+  loop: >-
+    {{ [pgbackrest_config_file, pgbackrest_log_path, pgbackrest_lock_path, pgbackrest_spool_path]
+       + (pgbackrest_repositories | map(attribute='path') | list) }}
+  loop_control:
+    loop_var: __pgbackrest_path
+    label: "{{ __pgbackrest_path }}"
+
+- name: PGBACKREST | Validate stanza names
+  ansible.builtin.assert:
+    that:
+      - __pgbackrest_name is match('^[A-Za-z0-9_][A-Za-z0-9_-]*$')
+      - __pgbackrest_name != 'global'
+    quiet: true
+  loop: "{{ pgbackrest_stanzas | map(attribute='name') }}"
+  loop_control:
+    loop_var: __pgbackrest_name
+    label: "{{ __pgbackrest_name }}"
+
+- name: PGBACKREST | Validate repository options
+  ansible.builtin.assert:
+    that:
+      - __pgbackrest_repository.id >= 1
+      - __pgbackrest_repository.id <= 256
+      - __pgbackrest_repository.host is not defined or __pgbackrest_repository.host | length > 0
+      - (__pgbackrest_repository.options | default({})).keys() | intersect(['path', 'host', 'type']) | length == 0
+    fail_msg: Repository IDs must be 1..256; options cannot override path, host or POSIX storage type.
+    quiet: true
+  loop: "{{ pgbackrest_repositories }}"
+  loop_control:
+    loop_var: __pgbackrest_repository
+  no_log: true
+
+- name: PGBACKREST | Validate stanza database paths
+  ansible.builtin.assert:
+    that:
+      - "'pg1-path' in __pgbackrest_stanza.options"
+      - __pgbackrest_stanza.options['pg1-path'] is match('^/')
+    fail_msg: Each stanza requires the absolute PostgreSQL data directory in options.pg1-path.
+    quiet: true
+  loop: "{{ pgbackrest_stanzas }}"
+  loop_control:
+    loop_var: __pgbackrest_stanza
+  no_log: true
+
+- name: PGBACKREST | Validate global option ownership
+  ansible.builtin.assert:
+    that:
+      - pgbackrest_options.keys() | intersect(['log-path', 'lock-path', 'spool-path']) | length == 0
+      - pgbackrest_options.keys() | select('match', '^repo[0-9]+-') | length == 0
+    fail_msg: Configure repositories and managed runtime paths through their dedicated variables.
+    quiet: true
+
+- name: PGBACKREST | Validate schedule references and fields
+  ansible.builtin.assert:
+    that:
+      - __pgbackrest_schedule.stanza in (pgbackrest_stanzas | map(attribute='name'))
+      - (__pgbackrest_schedule.repo | default(1)) in (pgbackrest_repositories | map(attribute='id'))
+      - __pgbackrest_schedule.minute | default('0') is match('^[0-9*/,-]+$')
+      - __pgbackrest_schedule.hour | default('2') is match('^[0-9*/,-]+$')
+      - __pgbackrest_schedule.day | default('*') is match('^[0-9*/,-]+$')
+      - __pgbackrest_schedule.month | default('*') is match('^[0-9*/,-]+$')
+      - __pgbackrest_schedule.weekday | default('*') is match('^[0-9*/,-]+$')
+    quiet: true
+  loop: "{{ pgbackrest_schedules }}"
+  loop_control:
+    loop_var: __pgbackrest_schedule
+    label: "{{ __pgbackrest_schedule.stanza }}"

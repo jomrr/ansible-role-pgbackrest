@@ -1,0 +1,39 @@
+# Managed by ansible.
+# file: {{ template_destpath }}
+
+[global]
+log-path={{ pgbackrest_log_path }}
+lock-path={{ pgbackrest_lock_path }}
+spool-path={{ pgbackrest_spool_path }}
+{% for __pgbackrest_repository in pgbackrest_repositories %}
+repo{{ __pgbackrest_repository.id }}-type=posix
+repo{{ __pgbackrest_repository.id }}-path={{ __pgbackrest_repository.path }}
+{% if __pgbackrest_repository.host is defined %}
+repo{{ __pgbackrest_repository.id }}-host={{ __pgbackrest_repository.host }}
+{% endif %}
+{% for __pgbackrest_key, __pgbackrest_value in (__pgbackrest_repository.options | default({})).items() %}
+repo{{ __pgbackrest_repository.id }}-{{ __pgbackrest_key }}={{ ('y' if __pgbackrest_value else 'n') if __pgbackrest_value is boolean else __pgbackrest_value }}
+{% endfor %}
+{% endfor %}
+{% for __pgbackrest_section, __pgbackrest_options in {'global': pgbackrest_options, 'global:backup': pgbackrest_backup_options, 'global:restore': pgbackrest_restore_options}.items() %}
+{% if __pgbackrest_section != 'global' %}
+
+[{{ __pgbackrest_section }}]
+{% endif %}
+{% for __pgbackrest_key, __pgbackrest_value in __pgbackrest_options.items() %}
+{% for __pgbackrest_entry in (__pgbackrest_value if __pgbackrest_value is sequence and __pgbackrest_value is not string else [__pgbackrest_value]) %}
+{{ __pgbackrest_key }}={{ ('y' if __pgbackrest_entry else 'n') if __pgbackrest_entry is boolean else __pgbackrest_entry }}
+{% endfor %}
+{% endfor %}
+{% endfor %}
+{% for __pgbackrest_stanza in pgbackrest_stanzas %}
+{% for __pgbackrest_suffix, __pgbackrest_options in {'': __pgbackrest_stanza.options, ':backup': __pgbackrest_stanza.backup_options | default({}), ':restore': __pgbackrest_stanza.restore_options | default({})}.items() %}
+
+[{{ __pgbackrest_stanza.name }}{{ __pgbackrest_suffix }}]
+{% for __pgbackrest_key, __pgbackrest_value in __pgbackrest_options.items() %}
+{% for __pgbackrest_entry in (__pgbackrest_value if __pgbackrest_value is sequence and __pgbackrest_value is not string else [__pgbackrest_value]) %}
+{{ __pgbackrest_key }}={{ ('y' if __pgbackrest_entry else 'n') if __pgbackrest_entry is boolean else __pgbackrest_entry }}
+{% endfor %}
+{% endfor %}
+{% endfor %}
+{% endfor %}

@@ -1,0 +1,17 @@
+---
+# role: pgbackrest
+# file: meta/main.yml
+
+galaxy_info:
+  author: Jonas Mauer
+  description: Install and configure pgBackRest for local and remote PostgreSQL backup and restore.
+  galaxy_tags:
+    - postgresql
+    - backup
+    - restore
+    - database
+  issue_tracker_url: https://github.com/jomrr/ansible-role-pgbackrest/issues
+  license: MIT
+  min_ansible_version: "2.22"
+  namespace: jomrr
+  role_name: pgbackrest

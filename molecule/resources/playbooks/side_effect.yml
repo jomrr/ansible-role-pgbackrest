@@ -1,0 +1,36 @@
+---
+# role: pgbackrest
+# file: molecule/resources/playbooks/side_effect.yml
+
+- name: PGBACKREST | Exercise configuration changes
+  hosts: all
+  gather_facts: true
+  tasks:
+
+    - name: PGBACKREST | Change backup settings and remove all jobs
+      ansible.builtin.include_role:
+        name: '{{ lookup(''ansible.builtin.env'', ''MOLECULE_PROJECT_DIRECTORY'') }}'
+      vars:
+        pgbackrest_schedules: []
+        pgbackrest_backup_options:
+          process-max: 2
+
+    - name: PGBACKREST | Read removed backup schedule
+      become: true
+      become_user: root
+      ansible.builtin.slurp:
+        src: /etc/cron.d/pgbackrest
+      register: __pgbackrest_test_removed_schedule
+
+    - name: PGBACKREST | Verify removed jobs cannot run
+      ansible.builtin.assert:
+        that:
+          - ''' backup'' not in (__pgbackrest_test_removed_schedule.content | b64decode)'
+        quiet: true
+
+    - name: PGBACKREST | Stop the scheduling service
+      become: true
+      become_user: root
+      ansible.builtin.service:
+        name: '{{ ''crond'' if ansible_facts.os_family == ''RedHat'' else ''cron'' }}'
+        state: stopped

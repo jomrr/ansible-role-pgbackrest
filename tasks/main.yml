@@ -1,0 +1,108 @@
+---
+# role: pgbackrest
+# file: tasks/main.yml
+
+- name: PGBACKREST | Load platform settings
+  ansible.builtin.include_vars: "{{ lookup('ansible.builtin.first_found', __pgbackrest_platform_files) }}"
+  vars:
+    __pgbackrest_platform_files:
+      files:
+        - "{{ ansible_facts.distribution }}.yml"
+        - "{{ ansible_facts.os_family }}.yml"
+      paths:
+        - "{{ role_path }}/vars"
+
+- name: PGBACKREST | Validate configuration inputs
+  ansible.builtin.import_tasks: assert.yml
+
+- name: PGBACKREST | Configure PostgreSQL RPM repository
+  ansible.builtin.import_tasks: repository.yml
+  when: ansible_facts.os_family == 'RedHat'
+
+- name: PGBACKREST | Configure openSUSE Leap PostgreSQL repository
+  ansible.builtin.import_tasks: repository-Suse.yml
+  when: ansible_facts.distribution == 'openSUSE Leap'
+
+- name: PGBACKREST | Install packages
+  become: true
+  become_user: root
+  ansible.builtin.package:
+    name: "{{ __pgbackrest_packages }}"
+    state: present
+
+- name: PGBACKREST | Create configuration directory
+  become: true
+  become_user: root
+  ansible.builtin.file:
+    path: "{{ pgbackrest_config_file | dirname }}"
+    state: directory
+    owner: root
+    group: "{{ pgbackrest_group }}"
+    mode: '0750'
+
+- name: PGBACKREST | Create runtime and local repository directories
+  become: true
+  become_user: root
+  ansible.builtin.file:
+    path: "{{ __pgbackrest_directory }}"
+    state: directory
+    owner: "{{ pgbackrest_user }}"
+    group: "{{ pgbackrest_group }}"
+    mode: '0750'
+  loop: >-
+    {{ [pgbackrest_log_path, pgbackrest_lock_path, pgbackrest_spool_path]
+       + (pgbackrest_repositories | rejectattr('host', 'defined') | map(attribute='path') | list) }}
+  loop_control:
+    loop_var: __pgbackrest_directory
+    label: "{{ __pgbackrest_directory }}"
+
+- name: PGBACKREST | Write configuration
+  become: true
+  become_user: root
+  ansible.builtin.template:
+    src: pgbackrest.conf.j2
+    dest: "{{ pgbackrest_config_file }}"
+    owner: root
+    group: "{{ pgbackrest_group }}"
+    mode: '0640'
+  no_log: true
+
+- name: PGBACKREST | Initialize configured stanzas
+  become: true
+  become_user: "{{ pgbackrest_user }}"
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/pgbackrest
+      - "--config={{ pgbackrest_config_file }}"
+      - "--stanza={{ __pgbackrest_stanza_name }}"
+      - --log-level-console=info
+      - stanza-create
+  register: __pgbackrest_stanza_create
+  changed_when: >-
+    (__pgbackrest_stanza_create.stdout_lines
+      | select('search', 'already exists on repo[0-9]+ and is valid$') | list | length)
+    < (pgbackrest_repositories | length)
+  loop: "{{ pgbackrest_stanzas | map(attribute='name') }}"
+  loop_control:
+    loop_var: __pgbackrest_stanza_name
+    label: "{{ __pgbackrest_stanza_name }}"
+  when: pgbackrest_create_stanzas
+
+- name: PGBACKREST | Write backup schedule
+  become: true
+  become_user: root
+  ansible.builtin.template:
+    src: cron.j2
+    dest: /etc/cron.d/pgbackrest
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: PGBACKREST | Enable scheduled backups
+  become: true
+  become_user: root
+  ansible.builtin.service:
+    name: "{{ __pgbackrest_cron_service }}"
+    enabled: true
+    state: started
+  when: pgbackrest_schedules | length > 0

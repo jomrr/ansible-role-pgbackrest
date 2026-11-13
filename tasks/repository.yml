@@ -1,0 +1,27 @@
+---
+# role: pgbackrest
+# file: tasks/repository.yml
+
+- name: PGBACKREST | Import PostgreSQL RPM signing key
+  become: true
+  become_user: root
+  ansible.builtin.rpm_key:
+    key: "https://download.postgresql.org/pub/repos/yum/keys/PGDG-RPM-GPG-KEY-{{ __pgbackrest_pgdg_key }}"
+    fingerprint: D4BF08AE67A0B4C7A1DBCCD240BCA2B408B40D20
+    state: present
+
+- name: PGBACKREST | Configure PostgreSQL common packages
+  become: true
+  become_user: root
+  ansible.builtin.yum_repository:
+    name: pgbackrest-pgdg-common
+    description: PostgreSQL common packages for pgBackRest
+    file: pgbackrest
+    baseurl: "https://download.postgresql.org/pub/repos/yum/common/{{ __pgbackrest_pgdg_path }}-$releasever-$basearch"
+    gpgkey: "https://download.postgresql.org/pub/repos/yum/keys/PGDG-RPM-GPG-KEY-{{ __pgbackrest_pgdg_key }}"
+    gpgcheck: true
+    enabled: true
+    includepkgs:
+      - pgbackrest
+      - pgdg-libssh2
+    state: present

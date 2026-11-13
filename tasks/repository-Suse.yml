@@ -1,0 +1,22 @@
+---
+# role: pgbackrest
+# file: tasks/repository-Suse.yml
+
+- name: PGBACKREST | Import openSUSE PostgreSQL signing key
+  become: true
+  become_user: root
+  ansible.builtin.rpm_key:
+    key: "{{ __pgbackrest_repository_url }}/repodata/repomd.xml.key"
+    fingerprint: 116EB86331583E47E63CDF4D562111AC05905EA8
+    state: present
+
+- name: PGBACKREST | Configure openSUSE PostgreSQL packages
+  become: true
+  become_user: root
+  community.general.zypper_repository:
+    name: pgbackrest-postgresql
+    description: openSUSE PostgreSQL packages for pgBackRest
+    repo: "{{ __pgbackrest_repository_url }}/"
+    enabled: true
+    disable_gpg_check: false
+    state: present

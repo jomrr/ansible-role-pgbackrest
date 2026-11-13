@@ -1,0 +1,173 @@
+---
+# role: pgbackrest
+# file: meta/argument_specs.yml
+
+argument_specs:
+  main:
+    short_description: Configure pgBackRest backup and restore.
+    options:
+      pgbackrest_user:
+        type: str
+        default: postgres
+        description:
+          - Existing operating-system account running pgBackRest; use the PostgreSQL owner
+            on database hosts.
+      pgbackrest_group:
+        type: str
+        default: postgres
+        description:
+          - Existing group allowed to read configuration and access local repositories.
+      pgbackrest_config_file:
+        type: path
+        default: /etc/pgbackrest/pgbackrest.conf
+        description:
+          - Absolute path of the managed pgBackRest configuration.
+      pgbackrest_log_path:
+        type: path
+        default: /var/log/pgbackrest
+        description:
+          - Directory for pgBackRest command logs.
+      pgbackrest_lock_path:
+        type: path
+        default: /var/lib/pgbackrest/lock
+        description:
+          - Persistent directory for pgBackRest locks and stop files.
+      pgbackrest_spool_path:
+        type: path
+        default: /var/spool/pgbackrest
+        description:
+          - Directory for asynchronous archive status and queues.
+      pgbackrest_repositories:
+        type: list
+        default:
+          - id: 1
+            path: /var/lib/pgbackrest/repo
+            options:
+              retention-full: 2
+        description:
+          - Repository definitions; omit host for local storage and supply host for a remote
+            repository.
+        elements: dict
+        options:
+          id:
+            type: int
+            required: true
+            description:
+              - Repository number from 1 through 256.
+          path:
+            type: path
+            required: true
+            description:
+              - Absolute repository path on its owning host.
+          host:
+            type: str
+            description:
+              - Remote repository hostname; omit for a local POSIX repository.
+          options:
+            type: dict
+            default: {}
+            description:
+              - Native repo options without the repoN- prefix, such as host-user and cipher-pass.
+      pgbackrest_options:
+        type: dict
+        default:
+          log-level-console: info
+          log-level-file: detail
+          start-fast: true
+        description:
+          - Additional global pgBackRest options using native names and YAML scalar or list
+            values.
+      pgbackrest_backup_options:
+        type: dict
+        default: {}
+        description:
+          - Native options in the global:backup section.
+      pgbackrest_restore_options:
+        type: dict
+        default: {}
+        description:
+          - Native options in the global:restore section, including recovery type and target.
+      pgbackrest_stanzas:
+        type: list
+        default: []
+        description:
+          - Database stanzas with native pg1-path, optional pg1-host and command-specific
+            options.
+        elements: dict
+        options:
+          name:
+            type: str
+            required: true
+            description:
+              - Unique stanza name containing letters, digits, underscores or hyphens.
+          options:
+            type: dict
+            required: true
+            description:
+              - Native stanza options; pg1-path is required.
+          backup_options:
+            type: dict
+            default: {}
+            description:
+              - Native stanza:backup options.
+          restore_options:
+            type: dict
+            default: {}
+            description:
+              - Native stanza:restore options.
+      pgbackrest_create_stanzas:
+        type: bool
+        default: false
+        description:
+          - Create configured stanzas after PostgreSQL and remote access are ready.
+      pgbackrest_schedules:
+        type: list
+        default: []
+        description:
+          - Cron backup jobs; replacing the list removes previously managed jobs.
+        elements: dict
+        options:
+          stanza:
+            type: str
+            required: true
+            description:
+              - Configured stanza to back up.
+          type:
+            type: str
+            choices:
+              - full
+              - diff
+              - incr
+            default: incr
+            description:
+              - Backup type.
+          repo:
+            type: int
+            default: 1
+            description:
+              - Configured repository number.
+          minute:
+            type: str
+            default: '0'
+            description:
+              - Cron minute field.
+          hour:
+            type: str
+            default: '2'
+            description:
+              - Cron hour field.
+          day:
+            type: str
+            default: '*'
+            description:
+              - Cron day of month field.
+          month:
+            type: str
+            default: '*'
+            description:
+              - Cron month field.
+          weekday:
+            type: str
+            default: '*'
+            description:
+              - Cron day of week field.

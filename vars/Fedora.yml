@@ -1,0 +1,12 @@
+---
+# role: pgbackrest
+# file: vars/Fedora.yml
+
+__pgbackrest_packages:
+  - pgbackrest
+  - openssh-clients
+  - cronie
+  - acl
+__pgbackrest_cron_service: crond
+__pgbackrest_pgdg_path: fedora/fedora
+__pgbackrest_pgdg_key: Fedora

@@ -1,0 +1,113 @@
+---
+# role: pgbackrest
+# file: defaults/main.yml
+
+# Existing operating-system account running pgBackRest; use the PostgreSQL owner on database hosts.
+pgbackrest_user: postgres
+
+# Existing group allowed to read configuration and access local repositories.
+pgbackrest_group: postgres
+
+# Absolute path of the managed pgBackRest configuration.
+pgbackrest_config_file: /etc/pgbackrest/pgbackrest.conf
+
+# Directory for pgBackRest command logs.
+pgbackrest_log_path: /var/log/pgbackrest
+
+# Persistent directory for pgBackRest locks and stop files.
+pgbackrest_lock_path: /var/lib/pgbackrest/lock
+
+# Directory for asynchronous archive status and queues.
+pgbackrest_spool_path: /var/spool/pgbackrest
+
+# Repository definitions; omit host for local storage and supply host for a remote repository.
+pgbackrest_repositories:
+  - id: 1
+    path: /var/lib/pgbackrest/repo
+    options:
+      retention-full: 2
+# Example: local storage plus a second repository reached over SSH.
+# pgbackrest_repositories:
+#   - id: 1
+#     path: /srv/pgbackrest/local
+#     options:
+#       retention-full: 2
+#   - id: 2
+#     path: /srv/pgbackrest/remote
+#     host: backup.example.net
+#     options:
+#       host-user: pgbackrest
+#       retention-full: 4
+
+# Additional global pgBackRest options using native names and YAML scalar or list values.
+pgbackrest_options:
+  log-level-console: info
+  log-level-file: detail
+  start-fast: true
+# Example: quieter console output and four parallel processes.
+# pgbackrest_options:
+#   log-level-console: warn
+#   log-level-file: info
+#   start-fast: true
+#   process-max: 4
+
+# Native options in the global:backup section.
+pgbackrest_backup_options: {}
+# Example: parallelism applied only to backup commands.
+# pgbackrest_backup_options:
+#   process-max: 4
+
+# Native options in the global:restore section, including recovery type and target.
+pgbackrest_restore_options: {}
+# Example: point-in-time recovery when restore is explicitly invoked.
+# pgbackrest_restore_options:
+#   type: time
+#   target: '2026-11-01 12:00:00+00'
+#   target-action: promote
+#   process-max: 4
+
+# Database stanzas with native pg1-path, optional pg1-host and command-specific options.
+pgbackrest_stanzas: []
+# Example: local database with per-stanza backup and restore settings.
+# pgbackrest_stanzas:
+#   - name: main
+#     options:
+#       pg1-path: /var/lib/postgresql/17/main
+#       pg1-port: 5432
+#       pg1-socket-path: /var/run/postgresql
+#     backup_options:
+#       process-max: 4
+#     restore_options:
+#       process-max: 2
+# Example: repository host initiating backups from a database host over SSH.
+# pgbackrest_stanzas:
+#   - name: main
+#     options:
+#       pg1-host: db.example.net
+#       pg1-host-user: postgres
+#       pg1-path: /var/lib/postgresql/17/main
+
+# Create configured stanzas after PostgreSQL and remote access are ready.
+pgbackrest_create_stanzas: false
+# Example: initialize stanzas after PostgreSQL and SSH access are ready.
+# pgbackrest_create_stanzas: true
+
+# Cron backup jobs; replacing the list removes previously managed jobs.
+pgbackrest_schedules: []
+# Example: weekly full and daily differential local backups, plus remote incrementals.
+# pgbackrest_schedules:
+#   - stanza: main
+#     repo: 1
+#     type: full
+#     weekday: '0'
+#     hour: '2'
+#   - stanza: main
+#     repo: 1
+#     type: diff
+#     weekday: '1-6'
+#     hour: '2'
+#   - stanza: main
+#     repo: 2
+#     type: incr
+#     minute: '30'
+#     hour: '3'

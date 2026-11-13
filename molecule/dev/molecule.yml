@@ -1,0 +1,119 @@
+---
+# role: pgbackrest
+# file: molecule/dev/molecule.yml
+
+dependency:
+  name: "galaxy"
+  options:
+    requirements-file: "${MOLECULE_PROJECT_DIRECTORY}/collections.yml"
+driver:
+  name: "podman"
+provisioner:
+  name: "ansible"
+  config_options:
+    defaults:
+      forks: 8
+      interpreter_python: "auto_silent"
+      callbacks_enabled: "ansible.builtin.default"
+      callback_result_format: "yaml"
+      display_ok_hosts: false
+      display_skipped_hosts: false
+      show_task_path_on_failure: true
+    connection:
+      pipelining: true
+  inventory:
+    group_vars:
+      all:
+        ansible_podman_mount_detection: false
+        ansible_user: "molecule"
+        pgbackrest_repositories:
+          - id: 1
+            path: "/var/lib/pgbackrest-test/local"
+            options:
+              retention-full: 2
+          - id: 2
+            path: "/var/lib/pgbackrest-test/remote"
+            host: "localhost"
+            options:
+              host-user: "postgres"
+              host-config: "/etc/pgbackrest/repository.conf"
+              retention-full: 2
+        pgbackrest_stanzas:
+          - name: "main"
+            options:
+              pg1-path: "/var/lib/pgbackrest-test/data"
+              pg1-port: 55432
+              pg1-socket-path: "/var/lib/pgbackrest-test"
+            restore_options:
+              type: "immediate"
+              target-action: "promote"
+        pgbackrest_create_stanzas: true
+        pgbackrest_schedules:
+          - stanza: "main"
+            type: "full"
+            repo: 1
+            minute: "0"
+            hour: "0"
+            day: "1"
+            month: "1"
+        pgbackrest_backup_options:
+          process-max: 1
+        pgbackrest_restore_options:
+          process-max: 2
+  log: true
+  playbooks:
+    prepare: "../resources/playbooks/prepare.yml"
+    converge: "../resources/playbooks/converge.yml"
+    verify: "../resources/playbooks/verify.yml"
+    side_effect: "../resources/playbooks/side_effect.yml"
+verifier:
+  name: "ansible"
+scenario:
+  test_sequence:
+    - "dependency"
+    - "cleanup"
+    - "destroy"
+    - "syntax"
+    - "create"
+    - "prepare"
+    - "converge"
+    - "idempotence"
+    - "check"
+    - "side_effect"
+    - "converge"
+    - "idempotence"
+    - "verify"
+    - "cleanup"
+    - "destroy"
+  name: "dev"
+platforms:
+  - name: "almalinux-latest-pgbackrest"
+    image: "docker.io/jomrr/molecule-almalinux:latest"
+    pre_build_image: true
+    override_command: false
+    systemd: "true"
+  - name: "debian-latest-pgbackrest"
+    image: "docker.io/jomrr/molecule-debian:latest"
+    pre_build_image: true
+    override_command: false
+    systemd: "true"
+  - name: "fedora-latest-pgbackrest"
+    image: "docker.io/jomrr/molecule-fedora:latest"
+    pre_build_image: true
+    override_command: false
+    systemd: "true"
+  - name: "opensuse-leap-latest-pgbackrest"
+    image: "docker.io/jomrr/molecule-opensuse-leap:latest"
+    pre_build_image: true
+    override_command: false
+    systemd: "true"
+  - name: "opensuse-tumbleweed-latest-pgbackrest"
+    image: "docker.io/jomrr/molecule-opensuse-tumbleweed:latest"
+    pre_build_image: true
+    override_command: false
+    systemd: "true"
+  - name: "ubuntu-latest-pgbackrest"
+    image: "docker.io/jomrr/molecule-ubuntu:latest"
+    pre_build_image: true
+    override_command: false
+    systemd: "true"

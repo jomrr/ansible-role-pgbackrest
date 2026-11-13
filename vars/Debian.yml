@@ -1,0 +1,10 @@
+---
+# role: pgbackrest
+# file: vars/Debian.yml
+
+__pgbackrest_packages:
+  - pgbackrest
+  - openssh-client
+  - cron
+  - acl
+__pgbackrest_cron_service: cron

@@ -1,0 +1,12 @@
+---
+# role: pgbackrest
+# file: vars/RedHat.yml
+
+__pgbackrest_packages:
+  - pgbackrest
+  - openssh-clients
+  - cronie
+  - acl
+__pgbackrest_cron_service: crond
+__pgbackrest_pgdg_path: redhat/rhel
+__pgbackrest_pgdg_key: RHEL
